@@ -1,0 +1,259 @@
+﻿@page "/seller"
+@inject HttpClient Http
+@inject IJSRuntime JS
+@using FacturacionUI.Models
+
+<PageTitle>Vendedores</PageTitle>
+
+<h1>Vendedores</h1>
+<br />
+<br />
+<div class="row g-3 mb-3">
+    <div class="col-md-2">
+        <input class="form-control" type="number" placeholder="Buscar por Id" @bind="filterId" @bind:event="oninput" />
+    </div>
+    <div class="col-md-3">
+        <input class="form-control" placeholder="Buscar por nombre" @bind="filterFN" @bind:event="oninput" />
+    </div>
+    <div class="col-md-3">
+        <input class="form-control" placeholder="Buscar por apellido" @bind="filterLN" @bind:event="oninput" />
+    </div>
+    <div class="col-md-2">
+        <input class="form-control" type="Number" placeholder="Buscar por cuenta contable" @bind="filterComission" @bind:event="oninput" />
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" @bind="filterState">
+            <option value="">Todos</option>
+            <option value="true">Activos</option>
+            <option value="false">Inactivos</option>
+        </select>
+    </div>
+    <div class="d-flex justify-content-end mb-3">
+        <button class="btn btn-outline-secondary" @onclick="CleanFilters">
+            Limpiar filtros
+        </button>
+    </div>
+</div>
+<button type="button" class="btn btn-primary" @onclick="OpenCreateModal">
+    Nuevo Vendedor
+</button>
+
+@if (sellers == null)
+{
+    <p><em>Cargando...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Identificador</th>
+                <th>Nombre</th>
+                <th>Apellido</th>
+                <th>Porcentaje de comision</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var seller in sellers.Where(s =>
+                    (filterId == null || s.Id.ToString().StartsWith(filterId.ToString())) &&
+                    (string.IsNullOrWhiteSpace(filterFN) || s.FirstName.Contains(filterFN, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(filterLN) || s.LastName.Contains(filterLN, StringComparison.OrdinalIgnoreCase)) &&
+                    (filterComission == null || s.CommissionPercentage == filterComission) &&
+                    (string.IsNullOrWhiteSpace(filterState) || s.IsActive.ToString().ToLower() == filterState.ToLower())
+                    ))
+            {
+                <tr>
+                    <td>@seller.Id</td>
+                    <td>@seller.FirstName</td>
+                    <td>@seller.LastName</td>
+                    <td>@seller.CommissionPercentage %</td>
+                    <td>@(seller.IsActive ? "Activo" : "Inactivo")</td>
+                    <td>
+                        <button type="button" class="btn btn-primary btn-sm me-2" @onclick="() => OpenEditModal(seller)">
+                            Editar
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm" @onclick="() => DeleteSeller(seller)">
+                            Eliminar
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    
+
+}
+
+<!-- Modal Create -->
+<div class="modal fade" id="createModal" tabindex="-1" aria-labelledby="createModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Crear Articulo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <EditForm Model="@newSeller" OnValidSubmit="NewSeller">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="FirstName" class="form-label">Nombre</label>
+                        <InputText id="FirstName" class="form-control" @bind-Value="newSeller.FirstName" />
+                         <ValidationMessage For="@(() => newSeller.FirstName)" class="text-danger" />
+
+                        <label for="LastName" class="form-label">Apellido</label>
+                        <InputText id="LastName" class="form-control" @bind-Value="newSeller.LastName" />
+                        <ValidationMessage For="@(() => newSeller.LastName)" class="text-danger" />
+
+                        <label for="Comission" class="form-label">Comision (%)</label>
+                        <InputNumber id="Comission" min="0" max ="100" class="form-control" @bind-Value="newSeller.CommissionPercentage" />
+                        <ValidationMessage For="@(() => newSeller.CommissionPercentage)" class="text-danger" />
+
+                        <div class="form-check mt-2">
+                            <InputCheckbox id="State" class="form-check-input" @bind-Value="newSeller.IsActive" />
+                            <label class="form-check-label" for="State">Activo</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+<!-- Modal Edit -->
+<div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Editar Articulo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <EditForm Model="@currentSeller" OnValidSubmit="EditSeller">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="FirstName" class="form-label">Nombre</label>
+                        <InputText id="FirstName" class="form-control" @bind-Value="newSeller.FirstName" />
+                        <ValidationMessage For="@(() => currentSeller.FirstName)" class="text-danger" />
+
+                        <label for="LastName" class="form-label">Apellido</label>
+                        <InputText id="LastName" class="form-control" @bind-Value="newSeller.LastName" />
+                        <ValidationMessage For="@(() => currentSeller.LastName)" class="text-danger" />
+
+                        <label for="Comission" class="form-label">Comision (%)</label>
+                        <InputNumber id="Comission" min ="0" max ="100" class="form-control" @bind-Value="newSeller.CommissionPercentage" />
+                        <ValidationMessage For="@(() => currentSeller.CommissionPercentage)" class="text-danger" />
+
+                        <div class="form-check mt-2">
+                            <InputCheckbox id="State" class="form-check-input" @bind-Value="newSeller.IsActive" />
+                            <label class="form-check-label" for="State">Activo</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    private Seller[]? sellers;
+    private Seller currentSeller = new();
+    private SellerDto newSeller = new();
+    private int? filterId = null;
+    private string filterFN = string.Empty;
+    private string filterLN = string.Empty;
+    private int? filterComission = null;
+    private string filterState = string.Empty;
+    ApiHost host = new();
+
+    private void CleanFilters()
+    {
+        filterId = null;
+        filterFN = string.Empty;
+        filterLN = string.Empty;
+        filterComission = null;
+        filterState = string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        sellers = await Http.GetFromJsonAsync<Seller[]>($"{host.BaseUrl}api/Sellers");
+    }
+
+    // Show create modal
+    private void OpenCreateModal()
+    {
+        newSeller = new SellerDto(); // reset form
+        JS.InvokeVoidAsync("modalHelper.showModal", "createModal");
+    }
+
+    private async Task NewSeller()
+    {
+        var response = await Http.PostAsJsonAsync($"{host.BaseUrl}api/Sellers", newSeller);
+        if (response.IsSuccessStatusCode)
+        {
+            await JS.InvokeVoidAsync("modalHelper.hideModal", "createModal");
+            sellers = await Http.GetFromJsonAsync<Seller[]>($"{host.BaseUrl}api/Sellers");
+        }
+        else
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("Error al guardar: " + error);
+        }
+    }
+
+    private void OpenEditModal(Seller seller)
+    {
+        currentSeller = new Seller
+        {
+            Id = seller.Id,
+            FirstName = seller.FirstName,
+            LastName = seller.LastName,
+            CommissionPercentage = seller.CommissionPercentage,
+            IsActive = seller.IsActive
+        };
+        JS.InvokeVoidAsync("modalHelper.showModal", "editModal");
+    }
+
+    private async Task DeleteSeller(Seller seller)
+    {
+        var response = await Http.DeleteAsync($"{host.BaseUrl}api/Clients/{seller.Id}");
+        if (response.IsSuccessStatusCode)
+        {
+            await JS.InvokeVoidAsync("modalHelper.hideModal", "deleteModal");
+            sellers = await Http.GetFromJsonAsync<Seller[]>($"{host.BaseUrl}api/Sellers");
+        }
+        else
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("Error al eliminar: " + error);
+        }
+    }
+
+    private async Task EditSeller()
+    {
+        var response = await Http.PutAsJsonAsync($"{host.BaseUrl}api/Sellers/{currentSeller.Id}", currentSeller);
+        if (response.IsSuccessStatusCode)
+        {
+            await JS.InvokeVoidAsync("modalHelper.hideModal", "editModal");
+            sellers = await Http.GetFromJsonAsync<Seller[]>($"{host.BaseUrl}api/Sellers");
+        }
+        else
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("Error al actualizar: " + error);
+        }
+    }
+    
+}

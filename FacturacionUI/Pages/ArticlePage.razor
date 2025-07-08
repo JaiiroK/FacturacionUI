@@ -1,0 +1,242 @@
+﻿@page "/article"
+@inject HttpClient Http
+@inject IJSRuntime JS
+@using FacturacionUI.Models
+
+<PageTitle>Articulos</PageTitle>
+
+<h1>Articulos</h1>
+<br />
+<br />
+<div class="row g-3 mb-3">
+    <div class="col-md-2">
+        <input class="form-control" type="number" placeholder="Buscar por Id" @bind="filterId" @bind:event="oninput" />
+    </div>
+    <div class="col-md-4">
+        <input class="form-control" placeholder="Buscar por descripción" @bind="filterDescription" @bind:event="oninput" />
+    </div>
+    <div class="col-md-3">
+        <input class="form-control" type="number" placeholder="Buscar por precio unitario" @bind="filterPrice" @bind:event="oninput" />
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" @bind="filterAvailability">
+            <option value="">Estado</option>
+            <option value="true">Disponibles</option>
+            <option value="false">No disponibles</option>
+        </select>
+    </div>
+    <div class="d-flex justify-content-end mb-3">
+        <button class="btn btn-outline-secondary" @onclick="CleanFilters">
+            Limpiar filtros
+        </button>
+    </div>
+</div>
+<button type="button" class="btn btn-primary" @onclick="OpenCreateModal">
+    Nuevo Articulo
+</button>
+
+
+@if (articles == null)
+{
+    <p><em>Cargando...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Identificador</th>
+                <th>Descripcion</th>
+                <th>Precio Unitario</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var article in articles.Where(a =>
+                    (filterId == null || a.Id.ToString().StartsWith(filterId.ToString())) &&
+                    (string.IsNullOrWhiteSpace(filterDescription) || a.Description.Contains(filterDescription, StringComparison.OrdinalIgnoreCase)) &&
+                    (filterPrice == null || a.UnitPrice == filterPrice) &&
+                    (string.IsNullOrWhiteSpace(filterAvailability) || a.IsAvailable.ToString().ToLower() == filterAvailability.ToLower())
+                    ))
+            {
+                <tr>
+                    <td>@article.Id</td>
+                    <td>@article.Description</td>
+                    <td>@article.UnitPrice</td>
+                    <td>@(article.IsAvailable ? "disponible" : "no disponible")</td>
+                    <td>
+                        <button type="button" class="btn btn-primary btn-sm me-2" @onclick="() => OpenEditModal(article)">
+                            Editar
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm" @onclick="() => DeleteArticle(article)">
+                            Eliminar
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<!-- Modal Create -->
+<div class="modal fade" id="createModal" tabindex="-1" aria-labelledby="createModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Crear Articulo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <EditForm Model="@nuevoArticulo" OnValidSubmit="NewArticle">
+                <DataAnnotationsValidator />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <ValidationSummary />
+                        <label for="Description" class="form-label">Descripción</label>
+                        <InputText id="Description" class="form-control" @bind-Value="nuevoArticulo.Description" />
+                        <ValidationMessage For="@(() => nuevoArticulo.Description)" class="text-danger" />
+
+                        <label for="UnitPrice" class="form-label">Precio Unitario</label>
+                        <InputNumber id="UnitPrice" class="form-control" step="0.01" min="0" @bind-Value="nuevoArticulo.UnitPrice" />
+                        <ValidationMessage For="@(() => nuevoArticulo.UnitPrice)" class="text-danger" />
+
+                        <div class="form-check mt-2">
+                            <InputCheckbox id="IsAvailable" class="form-check-input" @bind-Value="nuevoArticulo.IsAvailable" />
+                            <label class="form-check-label" for="IsAvailable">Disponible</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Edit -->
+<div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Editar Articulo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <EditForm Model="@currentArticle" OnValidSubmit="EditArticle">
+                <DataAnnotationsValidator />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <ValidationSummary />
+                        <label for="Description" class="form-label">Descripción</label>
+                        <InputText id="Description" class="form-control" @bind-Value="currentArticle.Description" />
+                        <ValidationMessage For="@(() => nuevoArticulo.Description)" class="text-danger" />
+
+                        <label for="UnitPrice" class="form-label">Precio Unitario</label>
+                        <InputNumber id="UnitPrice" class="form-control" step="0.01" min="0" @bind-Value="currentArticle.UnitPrice" />
+                        <ValidationMessage For="@(() => nuevoArticulo.UnitPrice)" class="text-danger" />
+
+                        <div class="form-check mt-2">
+                            <InputCheckbox id="IsAvailable" class="form-check-input" @bind-Value="currentArticle.IsAvailable" />
+                            <label class="form-check-label" for="IsAvailable">Disponible</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    private Article[]? articles;
+    private Article currentArticle = new();
+    private ArticleDto nuevoArticulo = new();
+    private int? filterId = null;
+    private string filterDescription = string.Empty;
+    private decimal? filterPrice = null;
+    private string filterAvailability = string.Empty;
+    ApiHost host = new();
+
+    private void CleanFilters()
+    {
+        filterId = null;
+        filterDescription = string.Empty;
+        filterPrice = null;
+        filterAvailability = string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        articles = await Http.GetFromJsonAsync<Article[]>($"{host.BaseUrl}api/Articles");
+    }
+
+    // Show create modal
+    private void OpenCreateModal()
+    {
+        nuevoArticulo = new ArticleDto(); // reset form
+        JS.InvokeVoidAsync("modalHelper.showModal", "createModal");
+    }
+
+    // Show edit modal with selected article data
+    private void OpenEditModal(Article article)
+    {
+        currentArticle = new Article
+        {
+            Id = article.Id,
+            Description = article.Description,
+            UnitPrice = article.UnitPrice,
+            IsAvailable = article.IsAvailable
+        };
+        JS.InvokeVoidAsync("modalHelper.showModal", "editModal");
+    }
+
+    // Create new article
+    private async Task NewArticle()
+    {
+        var response = await Http.PostAsJsonAsync($"{host.BaseUrl}api/Articles", nuevoArticulo);
+        if (response.IsSuccessStatusCode)
+        {
+            await JS.InvokeVoidAsync("modalHelper.hideModal", "createModal");
+            articles = await Http.GetFromJsonAsync<Article[]>($"{host.BaseUrl}api/Articles");
+        }
+        else
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("Error al guardar: " + error);
+        }
+    }
+    private async Task DeleteArticle(Article article)
+    {
+        var response = await Http.DeleteAsync($"{host.BaseUrl}api/Articles/{article.Id}");
+        if (response.IsSuccessStatusCode)
+        {
+            await JS.InvokeVoidAsync("modalHelper.hideModal", "deleteModal");
+            articles = await Http.GetFromJsonAsync<Article[]>($"{host.BaseUrl}api/Articles");
+        }
+        else
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("Error al eliminar: " + error);
+        }
+    }
+    // Edit existing article
+    private async Task EditArticle()
+    {
+        var response = await Http.PutAsJsonAsync($"{host.BaseUrl}api/Articles/{currentArticle.Id}", currentArticle);
+        if (response.IsSuccessStatusCode)
+        {
+            await JS.InvokeVoidAsync("modalHelper.hideModal", "editModal");
+            articles = await Http.GetFromJsonAsync<Article[]>($"{host.BaseUrl}api/Articles");
+        }
+        else
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("Error al actualizar: " + error);
+        }
+    }
+}
+

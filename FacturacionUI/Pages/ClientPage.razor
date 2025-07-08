@@ -1,0 +1,265 @@
+﻿@page "/client"
+@inject HttpClient Http
+@inject IJSRuntime JS
+@using FacturacionUI.Models
+
+<PageTitle>Clientes</PageTitle>
+
+<h1>Clientes</h1>
+<br/><br/>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-2">
+        <input class="form-control" type="number" placeholder="Buscar por Id" @bind="filterId" @bind:event="oninput" />
+    </div>
+    <div class="col-md-3">
+        <input class="form-control" placeholder="Buscar por nombre" @bind="filterName" @bind:event="oninput" />
+    </div>
+    <div class="col-md-2">
+        <input class="form-control" placeholder="Buscar por cédula" @bind="filterDocument" @bind:event="oninput" />
+    </div>
+    <div class="col-md-3">
+        <input class="form-control" placeholder="Buscar por cuenta contable" @bind="filterLedger" @bind:event="oninput" />
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" @bind="filterState">
+            <option value="">Todos</option>
+            <option value="true">Activos</option>
+            <option value="false">Inactivos</option>
+        </select>
+    </div>
+    <div class="d-flex justify-content-end mb-3">
+        <button class="btn btn-outline-secondary" @onclick="CleanFilters">
+            Limpiar filtros
+        </button>
+    </div>
+</div>
+<button type="button" class="btn btn-primary" @onclick="OpenCreateModal">
+    Nuevo Cliente
+</button>
+@if (clients == null)
+{
+    <p><em>Cargando...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Identificador</th>
+                <th>Nombre de Entidad</th>
+                <th>Numero de Identificacion</th>
+                <th>Cuenta Contable</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var client in clients.Where(c =>
+                    (filterId == null || c.Id.ToString().StartsWith(filterId.ToString())) &&
+                    (string.IsNullOrWhiteSpace(filterName) || c.BusinessName.Contains(filterName, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(filterDocument) || c.IdentificationNumber.Contains(filterDocument, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(filterLedger) || c.LedgerAccount.Contains(filterLedger, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(filterState) || c.IsActive.ToString().ToLower() == filterState.ToLower())
+                    ))
+            {
+                <tr>
+                    <td>@client.Id</td>
+                    <td>@client.BusinessName</td>
+                    <td>@client.IdentificationNumber</td>
+                    <td>@client.LedgerAccount</td>                    
+                    <td>@(client.IsActive ? "Activo" : "Inactivo")</td>
+                    <td>
+                        <!-- Boton de editar -->
+                        <button type="button" class="btn btn-primary btn-sm me-2" @onclick="() => OpenEditModal(client)">
+                            Editar
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm" @onclick="() => DeleteClient(client)">
+                            Eliminar
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+
+    <div class="modal fade" id="createModal" tabindex="-1" aria-labelledby="createModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exampleModalLabel">Crear Cliente</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <EditForm Model="@newClient" OnValidSubmit="NewClient">
+                    <DataAnnotationsValidator />
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <ValidationSummary />
+                            <label for="Name" class="form-label">Nombre</label>
+                            <InputText id="Name" class="form-control" @bind-Value="newClient.BusinessName" />
+                            <ValidationMessage For="@(() => newClient.BusinessName)" class="text-danger" />
+                            
+                            <label for="Description" class="form-label">Cedula o RNC</label>
+                            <InputText id="Documentation" class="form-control" @bind-Value="newClient.IdentificationNumber" />
+                            <ValidationMessage For="@(() => newClient.IdentificationNumber)" class="text-danger" />
+
+                            <label for="LedgerAccount" class="form-label">Cuenta Contable</label>
+                            <InputText id="LedgerAccount" class="form-control" @bind-Value="newClient.LedgerAccount" />
+                            <ValidationMessage For="@(() => newClient.LedgerAccount)" class="text-danger" />
+
+                            <div class="form-check mt-2">
+                                <InputCheckbox id="State" class="form-check-input" @bind-Value="newClient.IsActive" />
+                                <label class="form-check-label" for="State">Disponible</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exampleModalLabel">Editar Cliente</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <EditForm Model="@currentClient" OnValidSubmit="EditClient">
+                    <DataAnnotationsValidator />
+                    <div class="modal-body">
+                        <div class="mb-3">
+                             <ValidationSummary />
+                            <label for="Name" class="form-label">Nombre</label>
+                            <InputText id="Name" class="form-control" @bind-Value="currentClient.BusinessName" />
+                            <ValidationMessage For="@(() => currentClient.BusinessName)" class="text-danger" />
+                            
+                            <label for="Description" class="form-label">Cedula o RNC</label>
+                            <InputText id="Documentation" class="form-control" @bind-Value="currentClient.IdentificationNumber" />
+                            <ValidationMessage For="@(() => currentClient.IdentificationNumber)" class="text-danger" />
+
+                            <label for="LedgerAccount" class="form-label">Cuenta Contable</label>
+                            <InputText id="LedgerAccount" class="form-control" @bind-Value="currentClient.LedgerAccount" />
+                            <ValidationMessage For="@(() => currentClient.LedgerAccount)" class="text-danger" />
+
+                            <div class="form-check mt-2">
+                                <InputCheckbox id="State" class="form-check-input" @bind-Value="currentClient.IsActive" />
+                                <label class="form-check-label" for="State">Disponible</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+
+@code {
+    private Client[]? clients;
+    private Client currentClient = new();
+    private ClientDto newClient = new();
+    private int? filterId = null;
+    private string filterName = string.Empty;
+    private string filterDocument = string.Empty;
+    private string filterLedger = string.Empty;
+    private string filterState = string.Empty;
+    ApiHost host = new();
+
+    private void CleanFilters()
+    {
+        filterId = null;
+        filterName = string.Empty;
+        filterDocument = string.Empty;
+        filterLedger = string.Empty;
+        filterState = string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            clients = await Http.GetFromJsonAsync<Client[]>($"{host.BaseUrl}api/Clients");
+            if (clients == null)
+            {
+                clients = new Client[0]; 
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading clients: {ex.Message}");
+            clients = new Client[0]; 
+        }
+    }
+    private void OpenCreateModal()
+    {
+        newClient = new ClientDto(); // reset form
+        JS.InvokeVoidAsync("modalHelper.showModal", "createModal");
+    }
+
+    private void OpenEditModal(Client client)
+    {
+        currentClient = new Client
+        {
+            Id = client.Id,
+            BusinessName = client.BusinessName,
+            LedgerAccount = client.LedgerAccount,
+            IdentificationNumber = client.IdentificationNumber,
+            IsActive = client.IsActive
+        };
+        JS.InvokeVoidAsync("modalHelper.showModal", "editModal");
+    }
+
+    private async Task NewClient()
+    {
+        var response = await Http.PostAsJsonAsync($"{host.BaseUrl}api/Clients", newClient);
+        if (response.IsSuccessStatusCode)
+        {
+            await JS.InvokeVoidAsync("modalHelper.hideModal", "createModal");
+            clients = await Http.GetFromJsonAsync<Client[]>($"{host.BaseUrl}api/Clients");
+        }
+        else
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("Error al guardar: " + error);
+        }
+    }
+    private async Task DeleteClient(Client client)
+    {
+        var response = await Http.DeleteAsync($"{host.BaseUrl}api/Clients/{client.Id}");
+        if (response.IsSuccessStatusCode)
+        {
+            await JS.InvokeVoidAsync("modalHelper.hideModal", "deleteModal");
+            clients = await Http.GetFromJsonAsync<Client[]>($"{host.BaseUrl}api/Clients");
+        }
+        else
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("Error al eliminar: " + error);
+        }
+    }
+
+    private async Task EditClient()
+    {
+        var response = await Http.PutAsJsonAsync($"{host.BaseUrl}api/Clients/{currentClient.Id}", currentClient);
+        if (response.IsSuccessStatusCode)
+        {
+            await JS.InvokeVoidAsync("modalHelper.hideModal", "editModal");
+            clients = await Http.GetFromJsonAsync<Client[]>($"{host.BaseUrl}api/Clients");
+        }
+        else
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            Console.WriteLine("Error al actualizar: " + error);
+        }
+    }
+}
